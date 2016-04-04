@@ -53,13 +53,16 @@ class TTSSpeaker:
         self.currentPosition = None
         self.ebookViewer = ui
         self.canResume = False
+        self.selectMode = False
+        self.toggleSelectModeButton = None
         
     def playOrPause(self):
         if not self.isPlaying:
             if self.canResume:
                 self.spVoice.Resume()
             else:
-                self.speak()
+                self.initializeSpeech()
+                self.readStartingAtPage()
         else:
             self.pause()
     
@@ -68,6 +71,36 @@ class TTSSpeaker:
             self.isPlaying = False
             self.spVoice.Pause()
             self.canResume = True
+    
+    
+    def toggleSelectMode(self):
+        if not self.selectMode:
+            self.stop()
+            self.selectMode = True
+            self.toggleSelectModeButton.setChecked(self.selectMode)
+
+            self.evaljs('''
+                $("p").addClass("tts_selectMode");
+                $("p").click(function() 
+                {
+                    $(this).addClass("tts_reading")
+                    tts_speaker.readText($(this).text())
+                });
+            ''')
+            
+        else:
+            self.disableSelectMode()
+            
+            
+    def disableSelectMode(self):
+        self.selectMode = False
+        self.toggleSelectModeButton.setChecked(self.selectMode)
+        
+        
+        self.evaljs('''
+            $('.tts_selectMode').removeClass("tts_selectMode");
+            $("p").unbind('click')
+        ''')
             
     def stop(self):
     
@@ -84,8 +117,14 @@ class TTSSpeaker:
             
     def readText(self, text):
         import win32com.client
+        
+        self.initializeSpeech()
+        
         self.spVoice.Speak(text, win32com.client.constants.SVSFlagsAsync)
         self.isPlaying = True
+        self.disableSelectMode()
+            
+            
         
     def loadNextPage(self):
         if self.ebookViewer.current_index < len(self.ebookViewer.iterator.spine) - 1:
@@ -95,10 +134,10 @@ class TTSSpeaker:
         
         else:
             print ("TTS: Could not load next page; stopping")
-            self.isPlaying = True
+            self.isPlaying = False
             return False
         
-    def speak(self):
+    def initializeSpeech(self):
 
         if not self.spVoice:
             import win32com.client, weakref
@@ -118,6 +157,7 @@ class TTSSpeaker:
             
             self._advise.setDriver(self)
         
+    def readStartingAtPage(self):
         if self.evaljs:
             self.evaljs('''
  
@@ -245,6 +285,12 @@ class TextToSpeechPlugin(ViewerPlugin):
         self.speak_button.triggered.connect(self.tts_speaker.playOrPause)
         self.tts_speaker.toolbarButton = self.speak_button
         
+        self.select_mode_button = QAction('select mode', ui)
+        ui.tool_bar.addAction(self.select_mode_button)
+        self.select_mode_button.triggered.connect(self.tts_speaker.toggleSelectMode)
+        self.select_mode_button.setCheckable(True)
+        self.tts_speaker.toggleSelectModeButton = self.select_mode_button
+        
         self.stop_button = QAction('stop', ui)
         ui.tool_bar.addAction(self.stop_button)
         self.stop_button.triggered.connect(self.tts_speaker.stop)
@@ -265,7 +311,6 @@ class TextToSpeechPlugin(ViewerPlugin):
     def add_window_objects(self):
         self.ebookViewer.view.document.mainFrame().addToJavaScriptWindowObject('tts_speaker', Responder(self.ebookViewer.view.document))
 
-
     # this function is by far the slowest, and is what causes pauses in the render
     def run_javascript(self, evaljs):
         '''
@@ -278,7 +323,7 @@ class TextToSpeechPlugin(ViewerPlugin):
         # inject css
 
         evaljs('''
-            $("<style>.tts_reading { background-color: yellow !important; }</style>").appendTo(document.head)
+            $("<style>.tts_reading {  background-color: yellow !important;} p.tts_selectMode:hover {  background-color: #e7eaa4;  }   </style>").appendTo(document.head)
         ''')
 
         self.evaljs = evaljs

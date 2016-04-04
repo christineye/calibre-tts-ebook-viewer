@@ -9,7 +9,9 @@ Features:
 - Press Play to start reading at the top of the visible page, or resume from last paused position
 - Highlights the currently read paragraph and scrolls it into view if needed
     - Note: on paged mode, the bottom part of the paragraph may be clipped
+- Select mode: When select mode is enabled, click on any paragraph to start reading from that paragraph
 
 To do:
 - voice options
-- start at a selected paragraph instead of just the top of the page, etc
+- highlight color options
+- Highlight words instead of paragraphs
