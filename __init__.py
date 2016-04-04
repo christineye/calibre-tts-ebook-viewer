@@ -38,16 +38,20 @@ class Responder(QtCore.QObject):
         ebookViewer = document.parent().manager
         ebookViewer.tts_speaker.readText(text)
 
-
+    @pyqtSlot(result=bool)
+    def loadNextPage(self):
+        document = self.parent()
+        ebookViewer = document.parent().manager
+        return ebookViewer.tts_speaker.loadNextPage()
 
 class TTSSpeaker:
     
-    def __init__(self):
+    def __init__(self, ui):
         self.isPlaying = False
         self.evaljs = None
         self.spVoice = None
         self.currentPosition = None
-
+        self.ebookViewer = ui
         
     def playorpause(self):
         if not self.isPlaying:
@@ -59,13 +63,13 @@ class TTSSpeaker:
         if self.spVoice:
             self.isPlaying = False
             self.spVoice.Pause()
-            self.toolbarButton.text = "speak"
             
     def stop(self):
+    
+        
+        self.isPlaying = False
         if self.spVoice:
-            self.isPlaying = False
             self.spVoice.Pause()
-            self.toolbarButton.text = "speak"
             
             
             self.evaljs('''
@@ -76,7 +80,17 @@ class TTSSpeaker:
         import win32com.client
         self.spVoice.Speak(text, win32com.client.constants.SVSFlagsAsync)
         self.isPlaying = True
-        self.toolbarButton.text = "pause"
+        
+    def loadNextPage(self):
+        if self.ebookViewer.current_index < len(self.ebookViewer.iterator.spine) - 1:
+            print ("TTS: Loading next document")
+            self.ebookViewer.next_document()
+            return True
+        
+        else:
+            print ("TTS: Could not load next page; stopping")
+            self.isPlaying = True
+            return False
         
     def speak(self):
 
@@ -104,52 +118,7 @@ class TTSSpeaker:
             $currentReading = $(".tts_reading")
             if ($currentReading.length < 1)
             { 
-                $p = $("p:visible")
-                
-                if (window.paged_display != null && window.paged_display.in_paged_mode)
-                {
-                    var columnLeft = window.paged_display.current_column_location()
-                    
-                    $p.each(function(index, element)
-                    {
-                        var br = element.getBoundingClientRect()
-                        var pos = calibre_utils.viewport_to_document(br.left, br.top, element.ownerDocument)
-                        
-                        if (pos[0] >= columnLeft && pos[0] < columnLeft +  window.paged_display.page_width)
-                        {
-                            $currentReading = $(element);
-                            $currentReading.addClass("tts_reading")
-
-                            return false;
-                        }
-                    })
-                }
-                else
-                {
-                    var $window = $(window);
-
-                    var docViewTop = $window.scrollTop();
-                    var docViewBottom = docViewTop + $window.height();
-
-
-                    $p.each(function(index, element)
-                    {
-                        $elem = $(element)
-                        
-                        var elemTop = $elem.offset().top;
-                        var elemBottom = elemTop + $elem.height();
-
-                        if ((elemBottom <= docViewBottom) && (elemTop >= docViewTop))
-                        {
-                            $currentReading = $elem;
-                            $currentReading.addClass("tts_reading")
-                            
-                            
-                            return false;
-                        }
-                    })
-                }
-
+                $currentReading = getFirstParagraphInView()
             }
             else
             {
@@ -169,49 +138,63 @@ class TTSSpeaker:
                 $currentReading = $(".tts_reading:first")
                 $currentReading.removeClass("tts_reading")
                 
-                if ($currentReading.next().length > 0)
+                if ($currentReading.next(":visible").length > 0)
                 {
-                    $currentReading.next().addClass("tts_reading")
+                    $currentReading.next(":visible").addClass("tts_reading")
                 }
                 else
                 {
-                    $next = null
-                    $parent = $currentReading.parent()
-                    while (!$next && $parent)
+                    // Look for a cousin element if no sibling
+                    
+                    $parents = $currentReading.parentsUntil("body")
+                    for (var i = 0; i < $parents.length; i++)
                     {
-                        console.log("up one parent")
-                        $next = $parent.next()
-                        $parent = $parent.parent()
+                        if ($parents[i].next().length > 0)
+                        {
+                            $parents[i].next().addClass("tts_reading")
+                            break;
+                        }
                     }
                     
-                    $next.addClass("tts_reading")
+                    
                 }
-                
-                
+
                 $currentReading = $(".tts_reading:first")
                 
-                if (window.paged_display != null && window.paged_display.in_paged_mode)
+                if ($currentReading.length > 0)
                 {
-
-                    $currentReading.each(function(index, element)
-                    {
-                        var br = element.getBoundingClientRect()
-                        var pos = calibre_utils.viewport_to_document(br.left, br.top, element.ownerDocument)
-                        
-                        window.paged_display.scroll_to_xpos(pos[0] + 10)
-                    })
                     
+                    if (window.paged_display != null && window.paged_display.in_paged_mode)
+                    {
+
+                        $currentReading.each(function(index, element)
+                        {
+                            var br = element.getBoundingClientRect()
+                            var pos = calibre_utils.viewport_to_document(br.left, br.top, element.ownerDocument)
+                            
+                            window.paged_display.scroll_to_xpos(pos[0] + 10)
+                        })
+                        
+                    }
+                    else
+                    {
+                        if (($currentReading.position().top + $currentReading.height() > $(window).scrollTop() + window.innerHeight ) ||
+                            $currentReading.position().top < $(window).scrollTop())
+                        {
+                            $.scrollTo($currentReading)
+                        }
+                    }
+                    
+                    tts_speaker.readText($currentReading.text());
                 }
                 else
                 {
-                    if (($currentReading.position().top + $currentReading.height() > $(window).scrollTop() + window.innerHeight ) ||
-                        $currentReading.position().top < $(window).scrollTop())
-                    {
-                        $.scrollTo($currentReading)
-                    }
+                    // Couldn't find a next element, attempt to load next document
+                    
+                    tts_speaker.loadNextPage()
                 }
                 
-                tts_speaker.readText($currentReading.text());
+                
             ''')
     
     
@@ -245,7 +228,7 @@ class TextToSpeechPlugin(ViewerPlugin):
     def customize_ui(self, ui):
         self.ebookViewer = ui
         
-        self.tts_speaker = TTSSpeaker()
+        self.tts_speaker = TTSSpeaker(ui)
         self.ebookViewer.tts_speaker = self.tts_speaker
 
         ui.tool_bar.addSeparator()
@@ -287,7 +270,6 @@ class TextToSpeechPlugin(ViewerPlugin):
         isn't currently a load_css() function available.
         '''
         # inject css
-        print('injecting styling')
 
         evaljs('''
             $("<style>.tts_reading { background-color: yellow !important; }</style>").appendTo(document.head)
@@ -295,6 +277,13 @@ class TextToSpeechPlugin(ViewerPlugin):
 
         self.evaljs = evaljs
         self.tts_speaker.evaljs = evaljs
+        
+        if self.tts_speaker.isPlaying:
+            print ("TTS: Start reading automatically")
+            evaljs('''
+                $currentReading = getFirstParagraphInView().addClass("tts_reading")
+                tts_speaker.readText($currentReading.text());
+            ''')
 
     def load_javascript(self, evaljs):
         '''
@@ -303,7 +292,58 @@ class TextToSpeechPlugin(ViewerPlugin):
         loaded in the viewer. Use it to load javascript libraries
         into the viewer.
         '''
-        pass
+        evaljs('''
+        function getFirstParagraphInView()
+        {
+            $p = $(":visible")
+                        
+            if (window.paged_display != null && window.paged_display.in_paged_mode)
+            {
+                var columnLeft = window.paged_display.current_column_location()
+                
+                $p.each(function(index, element)
+                {
+                    var br = element.getBoundingClientRect()
+                    var pos = calibre_utils.viewport_to_document(br.left, br.top, element.ownerDocument)
+                    
+                    if (pos[0] >= columnLeft && pos[0] < columnLeft +  window.paged_display.page_width)
+                    {
+                        $currentReading = $(element);
+                        $currentReading.addClass("tts_reading")
+
+                        return false;
+                    }
+                })
+            }
+            else
+            {
+                var $window = $(window);
+
+                var docViewTop = $window.scrollTop();
+                var docViewBottom = docViewTop + $window.height();
+
+
+                $p.each(function(index, element)
+                {
+                    $elem = $(element)
+                    
+                    var elemTop = $elem.offset().top;
+                    var elemBottom = elemTop + $elem.height();
+
+                    if ((elemBottom <= docViewBottom) && (elemTop >= docViewTop))
+                    {
+                        $currentReading = $elem;
+                        $currentReading.addClass("tts_reading")
+                        
+                        
+                        return false;
+                    }
+                })
+            }
+            
+            return $currentReading
+        }
+        ''')
          
 
 
