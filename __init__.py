@@ -280,7 +280,7 @@ class TextToSpeechPlugin(ViewerPlugin):
         ui.tool_bar.addSeparator()
 
         
-        self.speak_button = QAction('play pause', ui)
+        self.speak_button = QAction('play / pause', ui)
         ui.tool_bar.addAction(self.speak_button)
         self.speak_button.triggered.connect(self.tts_speaker.playOrPause)
         self.tts_speaker.toolbarButton = self.speak_button
@@ -346,7 +346,7 @@ class TextToSpeechPlugin(ViewerPlugin):
         evaljs('''
         function getFirstParagraphInView()
         {
-            $p = $(":visible")
+            $p = $("body").children(":visible")
                         
             if (window.paged_display != null && window.paged_display.in_paged_mode)
             {
