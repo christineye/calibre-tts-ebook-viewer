@@ -52,10 +52,14 @@ class TTSSpeaker:
         self.spVoice = None
         self.currentPosition = None
         self.ebookViewer = ui
+        self.canResume = False
         
-    def playorpause(self):
+    def playOrPause(self):
         if not self.isPlaying:
-            self.speak()
+            if self.canResume:
+                self.spVoice.Resume()
+            else:
+                self.speak()
         else:
             self.pause()
     
@@ -63,14 +67,16 @@ class TTSSpeaker:
         if self.spVoice:
             self.isPlaying = False
             self.spVoice.Pause()
+            self.canResume = True
             
     def stop(self):
     
         
+        self.canResume = False
         self.isPlaying = False
         if self.spVoice:
             self.spVoice.Pause()
-            
+            self.spVoice = None
             
             self.evaljs('''
             $currentReading = $(".tts_reading").removeClass("tts_reading")
@@ -236,7 +242,7 @@ class TextToSpeechPlugin(ViewerPlugin):
         
         self.speak_button = QAction('play pause', ui)
         ui.tool_bar.addAction(self.speak_button)
-        self.speak_button.triggered.connect(self.tts_speaker.playorpause)
+        self.speak_button.triggered.connect(self.tts_speaker.playOrPause)
         self.tts_speaker.toolbarButton = self.speak_button
         
         self.stop_button = QAction('stop', ui)
