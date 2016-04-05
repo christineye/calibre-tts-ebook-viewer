@@ -3,7 +3,7 @@ from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
 
 __license__   = 'GPL v3'
-__copyright__ = '2014, github.com/christine.ye'
+__copyright__ = '2016, github.com/christineye'
 __docformat__ = 'restructuredtext en'
 
 # The class that all Interface Action plugin wrappers must inherit from
@@ -43,6 +43,24 @@ class Responder(QtCore.QObject):
         document = self.parent()
         ebookViewer = document.parent().manager
         return ebookViewer.tts_speaker.loadNextPage()
+        
+    @pyqtSlot()
+    def playOrPause(self):
+        document = self.parent()
+        ebookViewer = document.parent().manager
+        return ebookViewer.tts_speaker.playOrPause() 
+        
+    @pyqtSlot()
+    def toggleSelectMode(self):
+        document = self.parent()
+        ebookViewer = document.parent().manager
+        return ebookViewer.tts_speaker.toggleSelectMode()
+        
+    @pyqtSlot()
+    def stop(self):
+        document = self.parent()
+        ebookViewer = document.parent().manager
+        return ebookViewer.tts_speaker.stop()
 
 class TTSSpeaker:
     
@@ -142,15 +160,27 @@ class TTSSpeaker:
         if not self.spVoice:
             import win32com.client, weakref
             
-            # range 0(low) - 100(loud)
-            volume = 100
-            # range -10(slow) - 10(fast)
-            rate = 1
-            
             self.spVoice = win32com.client.Dispatch("SAPI.SpVoice")
             
-            self.spVoice.Rate = rate
-            self.spVoice.Volume = volume
+            from calibre_plugins.tts_ebook_viewer.config import prefs
+            
+            if prefs['voice']:
+                voice = None
+                voices = self.spVoice.GetVoices("", "")
+            
+                for i in range(voices.Count):
+                    if voices.Item(i).GetDescription() == prefs['voice']:
+                        voice = voices.Item(i)
+                        break
+                        
+                if voice:
+                    self.spVoice.Voice = voice
+                else:
+                    prefs['voice'] = None
+            
+            self.spVoice.Rate = prefs['rate']
+            self.spVoice.Volume = prefs['volume']
+            
             
             self.spVoice.EventInterests = win32com.client.constants.SPEI_END_INPUT_STREAM
             self._advise = win32com.client.WithEvents(self.spVoice, SAPI5DriverEventSink)
@@ -179,68 +209,86 @@ class TTSSpeaker:
         pass
 
     def OnEndStream(self, stream, pos):
+        self.canResume = False
+        self.evaljs('''
+            $currentReading = $(".tts_reading:first")
+            $currentReading.removeClass("tts_reading")
+            
+            if ($currentReading.next(":visible").length > 0)
+            {
+                $currentReading.next(":visible").addClass("tts_reading")
+            }
+            else
+            {
+                // Look for a cousin element if no sibling
+                
+                $parents = $currentReading.parentsUntil("body")
+                for (var i = 0; i < $parents.length; i++)
+                {
+                    if ($parents[i].next().length > 0)
+                    {
+                        $parents[i].next().addClass("tts_reading")
+                        break;
+                    }
+                }
+                
+                
+            }
+
+            $currentReading = $(".tts_reading:first")
+            
+            if ($currentReading.length > 0)
+            {
+                
+                if (window.paged_display != null && window.paged_display.in_paged_mode)
+                {
+
+                    $currentReading.each(function(index, element)
+                    {
+                        var br = element.getBoundingClientRect()
+                        var pos = calibre_utils.viewport_to_document(br.left, br.top, element.ownerDocument)
+                        
+                        window.paged_display.scroll_to_xpos(pos[0] + 10)
+                    })
+                    
+                }
+                else
+                {
+                    if (($currentReading.position().top + $currentReading.height() > $(window).scrollTop() + window.innerHeight ) ||
+                        $currentReading.position().top < $(window).scrollTop())
+                    {
+                        $.scrollTo($currentReading)
+                    }
+                }
+                
+                
+            }
+            
+            
+        ''')
+        
         if self.isPlaying:
             self.evaljs('''
-                $currentReading = $(".tts_reading:first")
-                $currentReading.removeClass("tts_reading")
-                
-                if ($currentReading.next(":visible").length > 0)
+            
+            if ($currentReading.length > 0)
                 {
-                    $currentReading.next(":visible").addClass("tts_reading")
-                }
-                else
-                {
-                    // Look for a cousin element if no sibling
-                    
-                    $parents = $currentReading.parentsUntil("body")
-                    for (var i = 0; i < $parents.length; i++)
-                    {
-                        if ($parents[i].next().length > 0)
-                        {
-                            $parents[i].next().addClass("tts_reading")
-                            break;
-                        }
-                    }
-                    
-                    
-                }
-
-                $currentReading = $(".tts_reading:first")
-                
-                if ($currentReading.length > 0)
-                {
-                    
-                    if (window.paged_display != null && window.paged_display.in_paged_mode)
-                    {
-
-                        $currentReading.each(function(index, element)
-                        {
-                            var br = element.getBoundingClientRect()
-                            var pos = calibre_utils.viewport_to_document(br.left, br.top, element.ownerDocument)
-                            
-                            window.paged_display.scroll_to_xpos(pos[0] + 10)
-                        })
-                        
-                    }
-                    else
-                    {
-                        if (($currentReading.position().top + $currentReading.height() > $(window).scrollTop() + window.innerHeight ) ||
-                            $currentReading.position().top < $(window).scrollTop())
-                        {
-                            $.scrollTo($currentReading)
-                        }
-                    }
-                    
                     tts_speaker.readText($currentReading.text());
                 }
-                else
-                {
-                    // Couldn't find a next element, attempt to load next document
-                    
-                    tts_speaker.loadNextPage()
-                }
+            else
+            {
+                // Couldn't find a next element, attempt to load next document
                 
+                tts_speaker.loadNextPage()
+            }
+            ''')
+        else:
+             self.evaljs('''
+            if ($currentReading.length == 0)
+            {
+                // Couldn't find a next element, attempt to load next document
                 
+                tts_speaker.loadNextPage()
+            }
             ''')
     
     
@@ -266,7 +314,7 @@ class TextToSpeechPlugin(ViewerPlugin):
     description         = 'adds TTS capability to ebook-viewer'
     supported_platforms = ['windows']
     author              = 'Christine Ye'
-    version             = (0, 0, 1)
+    version             = (0, 0, 2)
     minimum_calibre_version = (0, 7, 53)
 
 
@@ -289,6 +337,7 @@ class TextToSpeechPlugin(ViewerPlugin):
         ui.tool_bar.addAction(self.select_mode_button)
         self.select_mode_button.triggered.connect(self.tts_speaker.toggleSelectMode)
         self.select_mode_button.setCheckable(True)
+        self.select_mode_button.setChecked(False)
         self.tts_speaker.toggleSelectModeButton = self.select_mode_button
         
         self.stop_button = QAction('stop', ui)
@@ -315,10 +364,6 @@ class TextToSpeechPlugin(ViewerPlugin):
     def run_javascript(self, evaljs):
         '''
         this gets called after load_javascript.
-
-        we use it to initialize the annotator jquery plugin, as
-        well as to inject the annotator css styling because there
-        isn't currently a load_css() function available.
         '''
         # inject css
 
@@ -328,6 +373,52 @@ class TextToSpeechPlugin(ViewerPlugin):
 
         self.evaljs = evaljs
         self.tts_speaker.evaljs = evaljs
+        
+        def jsbool(pyBool):
+            return unicode(pyBool).lower()
+        
+        
+        from calibre_plugins.tts_ebook_viewer.config import prefs
+        if prefs['pause_hotkey_enabled'] or prefs['stop_hotkey_enabled'] or prefs['select_hotkey_enabled']:
+            hotkeyjs = '''
+                $(document).keydown(function(event)
+                {
+                    if (%s &&
+                        event.ctrlKey == %s &&
+                        event.altKey == %s &&
+                        event.shiftKey == %s &&
+                        event.which == %i)
+                    {
+                        tts_speaker.playOrPause()
+                    }
+                    else if (%s &&
+                        event.ctrlKey == %s &&
+                        event.altKey == %s &&
+                        event.shiftKey == %s &&
+                        event.which == %i)
+                    {
+                        tts_speaker.stop()
+                    }
+                    else if (%s &&
+                        event.ctrlKey == %s &&
+                        event.altKey == %s &&
+                        event.shiftKey == %s &&
+                        event.which == %i)
+                    {
+                        tts_speaker.toggleSelectMode()
+                    }
+                })
+            ''';
+            
+            hotkeyArgs = []
+            for hotkey in ['pause', 'stop', 'select']:
+                hotkeyArgs.append(jsbool(prefs[hotkey + '_hotkey_enabled']))
+                hotkeyArgs.append(jsbool(prefs[hotkey + '_hotkey_ctrl']))
+                hotkeyArgs.append(jsbool(prefs[hotkey + '_hotkey_alt']))
+                hotkeyArgs.append(jsbool(prefs[hotkey + '_hotkey_shift']))
+                hotkeyArgs.append(prefs[hotkey + '_hotkey_keycode'] )
+            
+            self.evaljs(hotkeyjs % tuple(hotkeyArgs))
         
         if self.tts_speaker.isPlaying:
             print ("TTS: Start reading automatically")
@@ -381,7 +472,7 @@ class TextToSpeechPlugin(ViewerPlugin):
                     var elemTop = $elem.offset().top;
                     var elemBottom = elemTop + $elem.height();
 
-                    if ((elemBottom <= docViewBottom) && (elemTop >= docViewTop))
+                    if ((elemTop <= docViewBottom) && (elemTop >= docViewTop))
                     {
                         $currentReading = $elem;
                         $currentReading.addClass("tts_reading")
@@ -427,9 +518,9 @@ class TextToSpeechPlugin(ViewerPlugin):
         # top of the module as importing the config class will also cause the
         # GUI libraries to be loaded, which we do not want when using calibre
         # from the command line
-        # from calibre_plugins.tts_ebookViewer.config import ConfigWidget
+        from calibre_plugins.tts_ebook_viewer.config import ConfigWidget
         # print('config config')
-        # return ConfigWidget()
+        return ConfigWidget()
 
     def save_settings(self, config_widget):
         '''

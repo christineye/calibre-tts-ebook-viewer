@@ -10,8 +10,8 @@ Features:
 - Highlights the currently read paragraph and scrolls it into view if needed
     - Note: on paged mode, the bottom part of the paragraph may be clipped
 - Select mode: When select mode is enabled, click on any paragraph to start reading from that paragraph
+- Voice configuration: Configure plugin to set the voice, rate, and volume
 
 To do:
-- voice options
 - highlight color options
 - Highlight words instead of paragraphs
