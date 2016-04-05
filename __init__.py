@@ -437,7 +437,7 @@ class TextToSpeechPlugin(ViewerPlugin):
         evaljs('''
         function getFirstParagraphInView()
         {
-            $p = $("body").children(":visible")
+            $p = $("body").find(":visible")
                         
             if (window.paged_display != null && window.paged_display.in_paged_mode)
             {

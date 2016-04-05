@@ -11,6 +11,7 @@ Features:
     - Note: on paged mode, the bottom part of the paragraph may be clipped
 - Select mode: When select mode is enabled, click on any paragraph to start reading from that paragraph
 - Voice configuration: Configure plugin to set the voice, rate, and volume
+- Customizable hotkeys for play/stop/select mode
 
 To do:
 - highlight color options
