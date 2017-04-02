@@ -77,6 +77,7 @@ class TTSSpeaker:
     def playOrPause(self):
         if not self.isPlaying:
             if self.canResume:
+                self.isPlaying = True
                 self.spVoice.Resume()
             else:
                 self.initializeSpeech()
