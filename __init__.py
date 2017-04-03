@@ -474,21 +474,41 @@ class TextToSpeechPlugin(ViewerPlugin):
         
         function isReadable(node)
         {
-            return node
+            var hasText = false;
+            node
                   .contents()
-                    .filter(function() {
+                    .each(function() {
                         var $this = $(this);
                       if (this.nodeType == 3)
                       {
                           if ($this.text().trim().length > 0)
                           {
-                            return true;
+                            hasText = true;
+                            return false;
                           }
                       }
-                }).length > 0;
+                });
+                
+            return hasText;
         }
         
         function getNextReadableChild(body)
+        {
+        	var readable = null;
+            // Find all children that have at least 1 text node child with real text
+            return body.find(":visible").each(function()
+            {
+                if (isReadable($(this)))
+                {
+                	readable = $(this);
+                  return false;
+                }
+            })
+            
+            return readable;
+        }
+        
+        function getAllReadableChildren(body)
         {
             // Find all children that have at least 1 text node child with real text
             return body.find(":visible").filter(function()
@@ -499,7 +519,7 @@ class TextToSpeechPlugin(ViewerPlugin):
         
         function getFirstParagraphInView()
         {
-            $p = getNextReadableChild($("body"))
+            $p = getAllReadableChildren($("body"))
                         
             if (window.paged_display != null && window.paged_display.in_paged_mode)
             {
