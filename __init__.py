@@ -215,9 +215,28 @@ class TTSSpeaker:
             $currentReading = $(".tts_reading:first")
             $currentReading.removeClass("tts_reading")
             
-            if ($currentReading.next(":visible").length > 0)
+            var nextVisible = $($currentReading.nextAll(":visible"))
+            
+            if (nextVisible.length > 0)
             {
-                $currentReading.next(":visible").addClass("tts_reading")
+                for (var j = 0; j< nextVisible.length; j++)
+                {
+                    var thisElement = $(nextVisible[j]);
+                    if (isReadable(thisElement))
+                    {
+                        thisElement.addClass("tts_reading")
+                        break;
+                    }
+                    else
+                    {
+                        var child = getNextReadableChild(thisElement);
+                        if (child.length > 0)
+                        {
+                            $(child[0]).addClass("tts_reading");
+                            break;
+                        }
+                    }
+                }
             }
             else
             {
@@ -226,9 +245,24 @@ class TTSSpeaker:
                 $parents = $currentReading.parentsUntil("body")
                 for (var i = 0; i < $parents.length; i++)
                 {
-                    if ($parents[i].next().length > 0)
+                    if ($($parents[i]).next().length > 0)
                     {
-                        $parents[i].next().addClass("tts_reading")
+                        var aunt = $($parents[i]).next();
+                        
+                        if (isReadable(aunt))
+                        {
+                            aunt.addClass("tts_reading")
+                            break;
+                        }
+                        else
+                        {
+                            var readableChild = getNextReadableChild(aunt);
+                            if (readableChild.length > 0)
+                            {
+                                $(readableChild[0]).addClass("tts_reading")
+                                break;
+                            }
+                        }
                         break;
                     }
                 }
@@ -436,9 +470,36 @@ class TextToSpeechPlugin(ViewerPlugin):
         into the viewer.
         '''
         evaljs('''
+        
+        
+        function isReadable(node)
+        {
+            return node
+                  .contents()
+                    .filter(function() {
+                        var $this = $(this);
+                      if (this.nodeType == 3)
+                      {
+                          if ($this.text().trim().length > 0)
+                          {
+                            return true;
+                          }
+                      }
+                }).length > 0;
+        }
+        
+        function getNextReadableChild(body)
+        {
+            // Find all children that have at least 1 text node child with real text
+            return body.find(":visible").filter(function()
+            {
+                return isReadable($(this));
+            })
+        }
+        
         function getFirstParagraphInView()
         {
-            $p = $("body").find(":visible")
+            $p = getNextReadableChild($("body"))
                         
             if (window.paged_display != null && window.paged_display.in_paged_mode)
             {
