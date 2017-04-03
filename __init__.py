@@ -496,7 +496,7 @@ class TextToSpeechPlugin(ViewerPlugin):
         {
         	var readable = null;
             // Find all children that have at least 1 text node child with real text
-            return body.find(":visible").each(function()
+            body.find(":visible").each(function()
             {
                 if (isReadable($(this)))
                 {
