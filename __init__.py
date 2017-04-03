@@ -103,7 +103,7 @@ class TTSSpeaker:
                 $("p").click(function() 
                 {
                     $(this).addClass("tts_reading")
-                    tts_speaker.readText($(this).html())
+                    tts_speaker.readText($(this).text())
                 });
             ''')
             
@@ -139,24 +139,7 @@ class TTSSpeaker:
         
         self.initializeSpeech()
         
-        import re
-        # remove all tags except for <i> or <em>
-        text = re.sub("<em>", "<i>", text)
-        text = re.sub("</em>", "</i>", text)
-        text = re.sub("<([^i>][^>]*|i[^>]+)>", "", text)
-        text = re.sub("<(/[^i>][^>]*|i[^>]+)>", "", text)
-        
-        # remove entities
-        text = re.sub("&hellip;", "...", text)
-        text = re.sub("&emdash;", "...", text)
-        text = re.sub("&[a-zA-Z]+;", " ", text)
-        text = re.sub("&#[0-9]+;", " ", text)
-        
-        # replace <i> with <emph>
-        text = re.sub("<i>", "<emph>", text)
-        text = re.sub("</i>", "</emph>", text)
-        
-        self.spVoice.Speak(text, win32com.client.constants.SVSFlagsAsync + win32com.client.constants.SVSFIsXML)
+        self.spVoice.Speak(text, win32com.client.constants.SVSFlagsAsync)
         self.isPlaying = True
         self.disableSelectMode()
             
@@ -219,7 +202,7 @@ class TTSSpeaker:
                 $currentReading = $currentReading[0]
             }
             
-            tts_speaker.readText($currentReading.html());
+            tts_speaker.readText($currentReading.text());
             ''')
     
     
@@ -229,33 +212,12 @@ class TTSSpeaker:
     def OnEndStream(self, stream, pos):
         self.canResume = False
         self.evaljs('''
-                 $currentReading = $(".tts_reading:first")
+            $currentReading = $(".tts_reading:first")
             $currentReading.removeClass("tts_reading")
             
-            nextVisible = $currentReading.next(":visible")
-            
-            if (nextVisible.length > 0)
+            if ($currentReading.next(":visible").length > 0)
             {
-                // This filter tries to find the first child that doesn't have any other block elements inside it
-                // This is for cases where there is a div containing child paragraphs - we would rather
-                // highlight the internal paragraph instead of the larger div
-                var child = nextVisible.find(":visible").filter(function() {
-                    if (	$(this).find("p, div, blockquote, h1, h2, h3, h4, h5, article").length == 0 )
-                    {
-                    return true;
-                    }
-                })
-                
-                // If there is such an element, read that next
-                if (child.length > 0)
-                {
-                    $(child[0]).addClass("tts_reading");
-                }
-                else
-                {
-                    // Otherwise, just use nextVisible
-                    nextVisible.addClass("tts_reading");
-                }
+                $currentReading.next(":visible").addClass("tts_reading")
             }
             else
             {
@@ -264,24 +226,9 @@ class TTSSpeaker:
                 $parents = $currentReading.parentsUntil("body")
                 for (var i = 0; i < $parents.length; i++)
                 {
-                    // If this parent has a sibling with content, go that element
-                    if ($($parents[i]).next().length > 0)
+                    if ($parents[i].next().length > 0)
                     {
-                        var nextCousin = $($($parents[i]).next()).find(":visible").filter(function() {
-                            if (	$(this).find("p, div, blockquote, h1, h2, h3, h4, h5, article").length == 0 )
-                            {
-                            return true;
-                            }
-                        })
-                            
-                        if (nextCousin.length > 0)
-                        {
-                            $(nextCousin[0]).addClass("tts_reading");
-                        }
-                        else
-                        {
-                            $($parents[i].next()).addClass("tts_reading");
-                        }
+                        $parents[i].next().addClass("tts_reading")
                         break;
                     }
                 }
@@ -324,9 +271,9 @@ class TTSSpeaker:
         if self.isPlaying:
             self.evaljs('''
             
-            if ($(".tts_reading:first").length > 0)
+            if ($currentReading.length > 0)
                 {
-                    tts_speaker.readText($(".tts_reading:first").html());
+                    tts_speaker.readText($currentReading.text());
                 }
             else
             {
@@ -478,7 +425,7 @@ class TextToSpeechPlugin(ViewerPlugin):
             print ("TTS: Start reading automatically")
             evaljs('''
                 $currentReading = getFirstParagraphInView().addClass("tts_reading")
-                tts_speaker.readText($currentReading.html());
+                tts_speaker.readText($currentReading.text());
             ''')
 
     def load_javascript(self, evaljs):
@@ -489,17 +436,9 @@ class TextToSpeechPlugin(ViewerPlugin):
         into the viewer.
         '''
         evaljs('''
-        
-
-        
         function getFirstParagraphInView()
         {
-            $p = $("body").find(":visible").filter(function() {
-                if (	$(this).find("p, div, blockquote, h1, h2, h3, h4, h5, article").length == 0 )
-                {
-                return true;
-                };
-                });
+            $p = $("body").find(":visible")
                         
             if (window.paged_display != null && window.paged_display.in_paged_mode)
             {
