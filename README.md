@@ -1,3 +1,8 @@
+# Important Update: Calibre now supports TTS in the built in reader by default! Use that instead of this plugin.
+
+
+
+
 # Calibre TTS Ebook Viewer
 
 A simple plugin for adding TTS support to Calibre's ebook viewer.
